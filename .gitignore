@@ -1,0 +1,42 @@
+# ─── Python 缓存与构建产物 ─────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ─── 测试与覆盖率缓存 ──────────────────────────
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+
+# ─── 备份目录（不纳入版本控制）──────────────────
+knowledge-backup-*/
+knowledge-rebuild-backup/
+*-backup-*/
+
+# ─── 临时文件与输出 ─────────────────────────────
+pytest-output.txt
+*.tmp
+*.bak
+*.log
+
+# ─── 本地学习状态（运行时生成）──────────────────
+knowledge/.learned.json
+
+# ─── 编辑器与系统文件 ───────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# ─── 个人临时笔记（根目录散落的 txt）────────────
+/*.txt

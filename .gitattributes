@@ -1,0 +1,21 @@
+# 默认：文本文件自动规范化换行符
+* text=auto eol=lf
+
+# 明确指定文本文件
+*.md       text eol=lf
+*.py       text eol=lf
+*.json     text eol=lf
+*.ini      text eol=lf
+*.txt      text eol=lf
+*.yml      text eol=lf
+*.yaml     text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# 二进制文件不做换行符转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary

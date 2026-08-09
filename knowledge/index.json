@@ -1,0 +1,402 @@
+{
+  "version": "2.0",
+  "updatedAt": "2026-08-05T02:13:11.643247+00:00",
+  "totalKnowledge": 16,
+  "domains": {
+    "frontend": 6,
+    "backend": 6,
+    "devops": 2,
+    "design": 0,
+    "business": 0,
+    "ai": 0,
+    "security": 0,
+    "general": 1
+  },
+  "types": {
+    "principle": 5,
+    "pattern": 0,
+    "template": 4,
+    "pitfall": 4,
+    "checklist": 2,
+    "decision": 0
+  },
+  "entries": [
+    {
+      "id": "e35bc9cc",
+      "title": "架构设计 —— 为什么这样设计",
+      "domain": "backend",
+      "type": "principle",
+      "layer": "L1-principles",
+      "slug": "principle-架构设计-为什么这样设计",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.199335+00:00",
+      "updatedAt": "2026-08-05T00:55:23.199335+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "24d10c2c",
+      "title": "设计原理 —— 可复用的核心经验",
+      "domain": "general",
+      "type": "principle",
+      "layer": "L1-principles",
+      "slug": "principle-设计原理-可复用的核心经验",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.199335+00:00",
+      "updatedAt": "2026-08-05T00:55:23.199335+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "0584d1fd",
+      "title": "管线详解 —— 从信号采集到行动建议",
+      "domain": "backend",
+      "type": "principle",
+      "layer": "L1-principles",
+      "slug": "principle-管线详解-从信号采集到行动建议",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.199335+00:00",
+      "updatedAt": "2026-08-05T00:55:23.199335+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "0c9ccd69",
+      "title": "踩坑记录与经验教训",
+      "domain": "frontend",
+      "type": "principle",
+      "layer": "L1-principles",
+      "slug": "principle-踩坑记录与经验教训",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.199335+00:00",
+      "updatedAt": "2026-08-05T00:55:23.199335+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "007922a9",
+      "title": "关键决策记录",
+      "domain": "frontend",
+      "type": "principle",
+      "layer": "L1-principles",
+      "slug": "principle-关键决策记录",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "9136eacf",
+      "title": "三层数据降级模式",
+      "domain": "backend",
+      "type": "template",
+      "layer": "L2-assets",
+      "slug": "template-三层数据降级模式",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "48dfebef",
+      "title": "有序关键词匹配的实现",
+      "domain": "devops",
+      "type": "template",
+      "layer": "L2-assets",
+      "slug": "template-有序关键词匹配的实现",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "6f40ffa3",
+      "title": "痛感描述生成",
+      "domain": "backend",
+      "type": "template",
+      "layer": "L2-assets",
+      "slug": "template-痛感描述生成",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "2677283b",
+      "title": "热度综合评分",
+      "domain": "devops",
+      "type": "template",
+      "layer": "L2-assets",
+      "slug": "template-热度综合评分",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "d198b3bb",
+      "title": "Phase 4：趋势交叉验证",
+      "domain": "backend",
+      "type": "checklist",
+      "layer": "L2-assets",
+      "slug": "checklist-phase-4趋势交叉验证",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "70039fce",
+      "title": "上线检查清单",
+      "domain": "frontend",
+      "type": "checklist",
+      "layer": "L2-assets",
+      "slug": "checklist-上线检查清单",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "9237eba4",
+      "title": "Reddit JSON API 的 429 限流陷阱",
+      "domain": "frontend",
+      "type": "pitfall",
+      "layer": "L2-assets",
+      "slug": "pitfall-reddit-json-api-的-429-限流陷阱",
+      "sourceProject": "ribbit-scanner",
+      "tags": [
+        "reddit",
+        "rate-limit",
+        "html-parsing"
+      ],
+      "version": 3,
+      "weight": 13,
+      "iterationCount": 1,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        },
+        {
+          "source": "ribbit-scanner",
+          "relation": "EXTEND",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "active"
+    },
+    {
+      "id": "41f87720",
+      "title": "Google 限流陷阱",
+      "domain": "backend",
+      "type": "pitfall",
+      "layer": "L2-assets",
+      "slug": "pitfall-google-限流陷阱",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 12,
+      "iterationCount": 0,
+      "crossRefs": [
+        {
+          "source": "ribbit-scanner",
+          "relation": "CONFIRM",
+          "at": "2026-08-05T02:12:47.704809+00:00"
+        }
+      ],
+      "createdAt": "2026-08-05T00:55:23.201340+00:00",
+      "updatedAt": "2026-08-05T00:55:23.201340+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.704809+00:00",
+      "status": "retired",
+      "retiredAt": "2026-08-05T02:13:11.643247+00:00",
+      "retireReason": "标题残缺语义不全，已由完整版本 Google Trends 的瞬时封禁 取代重建"
+    },
+    {
+      "id": "bb6d5cad",
+      "title": "Google Trends 的瞬时封禁",
+      "domain": "backend",
+      "type": "pitfall",
+      "layer": "L2-assets",
+      "slug": "pitfall-google-trends-的瞬时封禁",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 10,
+      "iterationCount": 0,
+      "crossRefs": [],
+      "createdAt": "2026-08-05T02:12:47.708975+00:00",
+      "updatedAt": "2026-08-05T02:12:47.708975+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.708975+00:00",
+      "status": "active"
+    },
+    {
+      "id": "2f2f14c6",
+      "title": "Amazon 的 HTML 结构漂移",
+      "domain": "frontend",
+      "type": "pitfall",
+      "layer": "L2-assets",
+      "slug": "pitfall-amazon-的-html-结构漂移",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 10,
+      "iterationCount": 0,
+      "crossRefs": [],
+      "createdAt": "2026-08-05T02:12:47.708975+00:00",
+      "updatedAt": "2026-08-05T02:12:47.708975+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.708975+00:00",
+      "status": "active"
+    },
+    {
+      "id": "b67a73b7",
+      "title": "前端 Mock 数据与真实数据脱节",
+      "domain": "frontend",
+      "type": "pitfall",
+      "layer": "L2-assets",
+      "slug": "pitfall-前端-mock-数据与真实数据脱节",
+      "sourceProject": "ribbit-scanner",
+      "tags": [],
+      "version": 1,
+      "weight": 10,
+      "iterationCount": 0,
+      "crossRefs": [],
+      "createdAt": "2026-08-05T02:12:47.708975+00:00",
+      "updatedAt": "2026-08-05T02:12:47.708975+00:00",
+      "lastReferencedAt": "2026-08-05T02:12:47.708975+00:00",
+      "status": "active"
+    }
+  ]
+}
