@@ -51,7 +51,7 @@ cd StarFounder-Skill
 无需安装第三方依赖，核心引擎仅使用 Python 标准库。运行测试可选装 pytest：
 
 ```bash
-pip install -r requirements-dev.txt
+pip install pytest
 pytest
 ```
 
@@ -88,6 +88,35 @@ python learn.py maintain          # 生命周期维护（衰减 + 退役候选�
 python learn.py maintain --dry-run  # 仅预览，不落盘
 python learn.py retire <知识ID> --reason "AI 已覆盖此能力"
 ```
+
+### 进阶命令（引擎扩展能力）
+
+除「三步上手」的基础命令外，引擎还提供以下运维与演进命令：
+
+```bash
+python learn.py precheck                          # 扫描根下所有 MD 的 scan gate 预览（不入库）
+python learn.py config list                       # 查看当前扫描根配置
+python learn.py config --add-root <路径>          # 新增扫描根
+python learn.py config --remove-root <路径>       # 移除扫描根
+python learn.py config --auto-workspace on        # 开启/关闭自动工作区探测
+python learn.py iterate-scan --apply              # L6 活体演进：比对 active 卡，给演进建议（默认仅预览）
+python learn.py recall --intent "我要做 OAuth"    # 按意图主动召回相关卡片并产出决策建议
+python learn.py protect <知识ID>                  # 标记核心知识；加 --unprotect 取消标记
+python learn.py dupcheck                          # 检测 L2 模板间高度相似重复，按簇输出
+python learn.py backfill --dry-run                # 存量回填：对历史库执行两类补救（默认预览）
+python learn.py audit-l1-consistency             # L1 语义一致性审计（加 --retire 才执行退役）
+```
+
+| 命令 | 作用 |
+|------|------|
+| `precheck` | 扫描根下所有 MD 的 scan gate 预览，不写入知识库 |
+| `config` | 管理扫描根：list / --add-root / --remove-root / --auto-workspace |
+| `iterate-scan` | L6 活体演进：对 active 卡两两互比，发现重叠/矛盾并给演进建议 |
+| `recall` | 主动召回：按当前项目/意图捞出相关卡片，产出决策建议 |
+| `protect` | 人工标记/取消核心知识（index.json 中 entry 的 core 字段） |
+| `dupcheck` | 检测 L2 模板间高度相似重复，按重复簇输出 |
+| `backfill` | 存量回填：对历史知识库执行两类补救动作 |
+| `audit-l1-consistency` | 存量 L1 语义一致性审计 |
 
 ---
 
