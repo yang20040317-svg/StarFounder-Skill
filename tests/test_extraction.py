@@ -70,13 +70,50 @@ def test_template_contains_parameters_guidance_and_limits(learn_module):
     assert "`base_delay`" in template["content"]
     assert "### 返回值" in template["content"]
     assert "retry_request(request, max_attempts=3, base_delay=1)" in template["content"]
+    assert "### 适用条件（何时该用）" in template["content"]
+    assert "### 禁忌（何时别用）" in template["content"]
+    assert "### 决策理由（为何这样写）" in template["content"]
     assert "运行时版本" in template["prerequisites"]
-    assert "异常处理" in template["limitations"]
+    # 决策字段必须来自源 MD 真实标记句，而非「使用前应确认依赖版本」这类占位腔。
+    assert "对业务逻辑错误" in template["decision_avoid"]
+    assert "指数退避而非固定间隔" in template["decision_why"]
+    assert "超时等可恢复异常" in template["decision_when"]
+
+
+def test_template_requires_decision_fields(learn_module):
+    """
+    模板卡必须带「适用条件 / 禁忌 / 决策理由」三项决策上下文。
+
+    只有裸函数 + 标题、源 MD 里没有任何适用/禁忌/取舍标记句的代码块，
+    属于「代码快照」而非经验，不应入库为 template。
+    """
+    # NOTE: 仅含标题与一段无上下文的多行函数，无「适用/不要/因为」等语义标记。
+    content = (
+        "# 工具函数\n\n"
+        "## 数据清洗函数\n\n"
+        "```python\n"
+        "def clean_data(rows):\n"
+        "    result = []\n"
+        "    for row in rows:\n"
+        "        if row:\n"
+        "            result.append(row.strip())\n"
+        "    return result\n"
+        "```\n"
+    )
+
+    assets = learn_module.extract_assets(content, "bare-function")
+    templates = [asset for asset in assets if asset["type"] == "template"]
+
+    assert not templates, "无决策上下文的裸代码块不应产出 template 卡"
 
 
 def test_pitfall_separates_problem_from_workaround(learn_module):
     """
     Pitfall 卡片必须包含独立的陷阱与绕过方案，且标题不能复制整段正文。
+
+    注意：同文档内更完整的「踩坑小节」卡会覆盖同源的通用正则碎片
+    （见 extract_pitfalls 的同源去重），因此本 fixture 最终只保留小节卡，
+    而非来自正文 `问题：` 行的简短正则卡。
     """
     content = (FIXTURE_DIR / "pitfall-sample.md").read_text(encoding="utf-8")
 
@@ -84,9 +121,11 @@ def test_pitfall_separates_problem_from_workaround(learn_module):
     pitfalls = [asset for asset in assets if asset["type"] == "pitfall"]
 
     assert len(pitfalls) == 1
-    assert pitfalls[0]["title"] == "频繁请求 Google Trends 会被 Google 限流陷阱"
-    assert pitfalls[0]["pitfall"] == "频繁请求 Google Trends 会被 Google 限流。"
-    assert "72 小时 TTL" in pitfalls[0]["workaround"]
+    # 同源正则碎片（「频繁请求 Google Trends 会被限流」）已被小节卡覆盖剔除，
+    # 保留更完整的小节卡。
+    assert pitfalls[0]["title"] == "Google Trends 的瞬时封禁"
+    assert "临时封禁" in pitfalls[0]["pitfall"]
+    assert "72 小时" in pitfalls[0]["workaround"]
     assert pitfalls[0]["content"].startswith("### 陷阱")
     assert "### 绕过方案" in pitfalls[0]["content"]
     assert pitfalls[0]["title"] != pitfalls[0]["content"]
@@ -125,6 +164,9 @@ def test_pitfall_section_uses_heading_and_full_body(learn_module):
 def test_pitfall_section_suppresses_fragment_duplicates(learn_module):
     """
     踩坑小节覆盖的文本不再被通用正则重复提取，弱陷阱碎片直接丢弃。
+
+    同源覆盖：正文中 `问题：频繁请求 Google Trends 会被 Google 限流` 与小节卡
+    「Google Trends 的瞬时封禁」同主题，应被小节卡覆盖剔除，不另成卡。
     """
     content = (FIXTURE_DIR / "pitfall-sample.md").read_text(encoding="utf-8")
 
@@ -134,3 +176,5 @@ def test_pitfall_section_suppresses_fragment_duplicates(learn_module):
     titles = [p["title"] for p in pitfalls]
     assert len(titles) == len(set(titles)), "同一来源不应产出重复陷阱卡"
     assert not any("只有" in title for title in titles)
+    # 同源正则碎片应被小节卡覆盖，不再单独成卡。
+    assert not any("频繁请求 Google Trends" in title for title in titles)

@@ -121,6 +121,103 @@ def test_decay_creates_reachable_retirement_candidate(learn_module, base_entry, 
     assert "90天未更新且权重≤5" in candidates[0]["retireReasons"]
 
 
+def test_retire_scan_includes_hollow(learn_module, empty_index):
+    """
+    空洞卡（充实度 < 40 且未人工标记 core）应直接进退役候选，
+    不必等 180 天老化窗口，且原因标注为「内容空洞」。
+    """
+    now = datetime(2026, 8, 4, tzinfo=timezone.utc)
+    # NOTE: 正文仅占位腔、无任何实质内容，充实度必低于阈值；
+    # core 缺失（非 True）即视为可被自动退役。
+    hollow_entry = {
+        "id": "entry-hollow",
+        "title": "Agent 架构",
+        "domain": "ai",
+        "type": "principle",
+        "layer": "L1-principles",
+        "slug": "agent-architecture",
+        "sourceProject": "baseline",
+        "tags": [],
+        "version": 1,
+        "weight": 10,
+        "iterationCount": 0,
+        "crossRefs": [],
+        "createdAt": now.isoformat(),
+        "updatedAt": now.isoformat(),
+        "lastReferencedAt": now.isoformat(),
+        "status": "active",
+        # 占位腔内容，充实度必然 < 40
+        "content": "待补充更多内容，此处先占位。",
+    }
+    empty_index["entries"] = [hollow_entry]
+
+    candidates = learn_module.retire_scan(empty_index, now)
+
+    assert len(candidates) == 1
+    assert candidates[0]["id"] == "entry-hollow"
+    reason = ", ".join(candidates[0]["retireReasons"])
+    assert "空洞" in reason
+    assert "hollow" in candidates[0]["retireCategory"]
+
+
+def test_ensure_same_title_link_is_bidirectional_and_idempotent(learn_module):
+    """
+    存量回填的孤儿重算依赖 _ensure_same_title_link：两张同名 base slug 的卡
+    应建立双向 RELATION_SAME_TITLE，且重复调用不重复追加（幂等）。
+    """
+    a = {"id": "a-1", "slug": "门控函数", "crossRefs": []}
+    b = {"id": "b-1", "slug": "门控函数-2", "crossRefs": []}
+
+    added_first = learn_module._ensure_same_title_link(a, b)
+    assert added_first is True
+    # a -> b 与 b -> a 双向都存在
+    assert any(
+        r["source"] == "b-1" and r["relation"] == learn_module.RELATION_SAME_TITLE
+        for r in a["crossRefs"]
+    )
+    assert any(
+        r["source"] == "a-1" and r["relation"] == learn_module.RELATION_SAME_TITLE
+        for r in b["crossRefs"]
+    )
+
+    added_second = learn_module._ensure_same_title_link(a, b)
+    assert added_second is False  # 已存在则不再新增
+    assert len(a["crossRefs"]) == 1
+    assert len(b["crossRefs"]) == 1
+
+
+def test_retire_scan_excludes_core_from_hollow(learn_module, empty_index):
+    """
+    retire_scan 必须排除人工标记 core:true 的卡，哪怕它内容空洞。
+    这是批量退役的安全逃生阀。
+    """
+    now = datetime(2026, 8, 4, tzinfo=timezone.utc)
+    hollow_core = {
+        "id": "entry-core-hollow",
+        "title": "核心架构原则",
+        "domain": "ai",
+        "type": "principle",
+        "layer": "L1-principles",
+        "slug": "core-architecture",
+        "sourceProject": "baseline",
+        "tags": [],
+        "version": 1,
+        "weight": 10,
+        "iterationCount": 0,
+        "crossRefs": [],
+        "createdAt": now.isoformat(),
+        "updatedAt": now.isoformat(),
+        "lastReferencedAt": now.isoformat(),
+        "status": "active",
+        "core": True,  # 人工标记核心，即使空洞也豁免
+        "content": "待补充更多内容，此处先占位。",
+    }
+    empty_index["entries"] = [hollow_core]
+
+    candidates = learn_module.retire_scan(empty_index, now)
+    assert candidates == [], "core:true 的空洞卡不应进退役候选"
+
+
 def test_lifecycle_dry_run_does_not_persist_decay(
     learn_module, base_entry, empty_index, monkeypatch
 ):

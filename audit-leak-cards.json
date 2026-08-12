@@ -1,0 +1,20 @@
+{
+  "total_active_index": 163,
+  "hollow_count": 0,
+  "missing_decision_count": 1,
+  "leak_count": 1,
+  "leaks": [
+    {
+      "source": "disk-template",
+      "id": null,
+      "title": "三层数据降级模式",
+      "type": "template",
+      "domain": null,
+      "weight": null,
+      "score": null,
+      "reasons": [
+        "决策字段占位腔（由模板中的变量和配置项决定; 由代码片段实际执行结果决定）"
+      ]
+    }
+  ]
+}

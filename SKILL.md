@@ -21,6 +21,8 @@ description: 将项目 Markdown 文档转化为可复用、可迭代、可退役
 
 **质量阈值**：至少命中 2 个信号才认定为原理，按信号强度排序取 Top 10。
 
+**事后校验（语义一致性）**：抽取出的卡片需通过「原则陈述 ↔ 行动指引」主题一致性检测，过滤两者脱节的错位卡片（实词重叠度低于阈值、或极性互斥且无共享实体）。被过滤的卡片不入库，仅在报告中列出供人工复核。详见 `learn.py` 的 `audit_l1_consistency`。
+
 输出产物：`knowledge/L1-principles/{slug}.md`，每个文件一条原理。
 
 ---
@@ -71,6 +73,19 @@ description: 将项目 Markdown 文档转化为可复用、可迭代、可退役
 | **NEW** | 无匹配 | 新建卡片 |
 
 **原则**：不覆盖，只追加。版本历史是比当前版本更有价值的信息。
+
+### L4.5 · 摄入前查重（治本方案）
+
+标题重叠判定只能捕获"标题相似"的重复；但多项目反复生成**内容高度相似、标题却不同**的近似模板（如不同项目都产出的 Dockerfile 模板），会漏过 L4 落为 NEW，最终在库内堆积成重复资产（`dupcheck` 的灰区即此类下游症状）。
+
+因此在 L4 之后、写盘之前，对每条 NEW 知识再做一次**正文相似度查重**：
+
+- 算法：复用 L2 去重的实词 Jaccard 口径（模板先剥离框架套话）
+- 阈值：`INGEST_DEDUP_THRESHOLD = 0.6`（沿用 dupcheck 高置信基线上沿）
+- 命中高相似（≥0.6）：**跳过新建**（不占存储），仅把来源项目追加到已有卡片 `crossRefs`，关系标记为 `PREINGEST_DEDUP`，并刷新 `lastReferencedAt`（等效一次轻量旁证 CONFIRM）
+- 未命中：正常新建
+
+> 事后 `dupcheck` 只能发现重复、无法阻止存储膨胀；摄入前查重从源头堵住漏水口，比事后清理更省空间。二者互补：`dupcheck` 用于治理历史债，`ingest` 查重防止新债产生。
 
 ---
 
@@ -166,6 +181,9 @@ python learn.py maintain --dry-run
 ### L1 · 提取原理（{N} 条）
 - **{原理标题}** — {一句话摘要} → `L1-principles/{slug}.md`
 
+### L1 · 语义一致性校验（过滤 {M} 条）
+- ⚠️ **{被过滤原理标题}** (重叠度 {score}) — {错位原因}
+
 ### L2 · 可复用资产（{N} 件）
 - **[模板]** {描述} → `L2-assets/templates/{slug}.md`
 - **[清单]** {描述} → `L2-assets/checklists/{slug}.md`
@@ -235,17 +253,72 @@ python learn.py maintain --dry-run
 
 ---
 
+## 会话启动钩子（激活时执行）
+
+> **主动反哺回路**：知识库不能只单向写入 `knowledge/`。AI 在对话开头必须主动把库里相关经验「捞出来、塞进上下文、给建议」，带着经验干活，而不是等用户手动 `search`。本钩子实现三层反哺：①主动召回 ②上下文注入 ③决策建议。
+
+当用户命中上方「触发词」或语义与本技能相关时，**在动手前先执行主动召回**：
+
+```bash
+# 方式一：传入当前项目路径，引擎自动从目录名 + 近期 MD 推导意图词并召回
+python learn.py recall --workspace "D:\当前项目"
+
+# 方式二：直接描述意图（无项目路径时）
+python learn.py recall --intent "Docker 容器构建镜像体积优化"
+
+# 结构化输出（便于脚本/自动化二次处理）
+python learn.py recall --workspace "D:\当前项目" --json
+```
+
+`recall` 输出包含三层内容，请**全部纳入本次对话的系统提示/任务上下文**：
+1. **主动召回**：按意图词加权匹配（标题 > tag > 正文实词，高权重卡优先），返回 Top-N 相关卡片；
+2. **上下文注入**：每张命中卡附「核心内容」摘要，直接作为你思考该问题的背景经验；
+3. **决策建议**：自动从命中卡筛出 `pitfall` / `checklist`，聚类产出「⚠️ 这个项目要当心 X」「✅ 上线前按 Y 清单核对」的主动提醒。
+
+**补充基线（领域级）**：若要判断"该学什么/哪些领域空白"，再跑：
+
+```bash
+python learn.py overview   # 领域分布 / 空白领域 / Top 高权重知识
+```
+
+将 `overview` 的「空白领域 / 已饱和领域」作为摄入去重基线——用户要"学新项目"时先看哪些领域已饱和、哪些是空白，避免重复摄入近似模板。
+
+**条件触发，非每次会话**：仅在技能被激活时执行，纯闲聊或与知识库无关的任务不触发，避免无谓的索引读取开销。`recall` 默认只读索引 + 命中卡正文，开销可控。
+
+---
+
 ## CLI 命令
 
 ```bash
-python learn.py ingest <file>     # 学习单个项目 MD
-python learn.py scan              # 扫描 projects/ 下所有新 MD
+python learn.py ingest <file>     # 学习单个项目 MD（含 L4.5 摄入前查重：高度相似则跳过新建）
+python learn.py scan              # 扫描 config.json 的 scan_roots（多目录）+ 当前工作区：新增或「内容有改动(mtime 变化)」的 MD 会重新摄入；未改动则跳过（不重复）
+python learn.py scan --workspace "D:\当前项目"   # 额外扫描你正在编程的位置（自动识别，不写入 config）
+python learn.py config --list               # 查看当前扫描源
+python learn.py config --add-root "D:\新项目"   # 新增扫描源（无需手动建软链）
+python learn.py config --remove-root "D:\旧项目" # 移除扫描源
+python learn.py config --auto-workspace on|off  # 是否自动包含工作区
 python learn.py overview          # 知识库概览 + 空白扫描 + 失衡检测
-python learn.py stats             # 健康度诊断报告
+python learn.py stats             # 健康度诊断报告（含内容充实度：平均充实度/空洞卡片率/占位填充率）
 python learn.py search "关键词"    # 搜索知识库
+python learn.py recall --workspace "D:\项目" # 主动召回：按项目/意图捞相关卡 + 注入摘要 + 决策建议（三层反哺，按业务 tag 语义命中）
+python learn.py recall --intent "描述" --json  # 按意图召回（结构化输出）
+python learn.py backfill          # 存量回填：补建孤儿关联 + 批量退役空洞卡 + 自动补业务 tag（从标题+正文推导，供 recall 语义召回）
+python learn.py backfill --dry-run # 预演（不落盘）
 python learn.py retire-scan       # 列出退役候选
+python learn.py dupcheck          # L2 模板相似度去重检测（疑似重复对）
 python learn.py retire <id> --reason "原因"  # 退役
+python learn.py protect <id>       # 人工标记核心（免于 retire-scan 自动退役，含空洞规则）
+python learn.py protect <id> --unprotect  # 取消核心标记
+python learn.py iterate-scan       # L6 活体演进：active 卡两两互比，发现 CONFIRM/EXTEND/CONFLICT 并给退役外建议（默认 dry-run 只读）
+python learn.py iterate-scan --apply     # 真正写入索引（权重/版本/crossRefs）；CONFLICT 仅告警不自动改
+python learn.py iterate-scan --min-overlap 0.4  # 调整最小重叠阈值（默认 0.3）
 ```
+
+> **退役候选判定（retire-scan）**：满足以下任一即进候选——
+> - 90 天未更新且权重 ≤ 5；或 120 天从未迭代；或 **180 天未被引用**；
+> - **空洞卡片**：内容充实度 < 40（`score_content_fulfillment` 口径），直接进候选，**不必等 180 天时间窗口**（装饰性空壳应尽早清理）；`template` 类型本就是「给他人填的壳」，此规则不适用，避免误杀可复用骨架。
+>
+> **人工白名单**：经 `protect <id>` 标记 `core: true` 的卡，免于一切自动退役（含空洞规则）；`protect <id> --unprotect` 取消。
 
 ## 治理规则
 
@@ -255,3 +328,15 @@ python learn.py retire <id> --reason "原因"  # 退役
 4. **索引即真相**：`knowledge/index.json` v2 格式，含 crossRefs、lastReferencedAt、weight 等治理字段
 5. **Slug 唯一性**：自动追加短哈希防止文件名冲突
 6. **幂等保护**：`.learned.json` 记录已学习文件，避免重复摄入
+
+## 部署说明（本机）
+
+- **扫描源由 `config.json` 驱动**（不再写死 junction）：`scan_roots` 是字符串数组，列出要扫描的目录；`auto_include_workspace` 控制是否自动纳入当前工作区。
+- 当前配置：`scan_roots = ["D:\\shujuchucun"]`，即用户的项目资料库。因此 `scan` 与每日自动化直接读取 D 盘项目，无需手动搬运文件。
+- `scan` 为**递归**扫描，并跳过 `node_modules` / `.git` / `.codebuddy` / `.backup` / `dist` / `build` / `.workbuddy` 等噪声目录，避免把第三方依赖或 Agent 内部文档吃进知识库。
+- **自己改扫描源（无需找助手）**：
+  - 直接编辑 `config.json` 的 `scan_roots` 数组；或
+  - 运行 `python learn.py config --add-root "D:\新项目"` / `--remove-root "D:\旧项目"`；或
+  - 对话里说「学一下 D:\xxx」「把 D:\yyy 加进经验库」等，由助手写入 config。
+- **自动识别当前编程位置**：在对话里触发扫描时，可传入 `--workspace <当前项目路径>`，该目录会临时加入本次扫描（不写入 config，下次需重传）；也可保持 `auto_include_workspace: true`，由助手在对话时自动把当前工作区传入。
+- `C:\Users\27513\WorkBuddy`（WorkBuddy 内部数据目录）**未**纳入固定扫描源，避免把内部会话/记忆 .md 当作项目知识摄入（`.workbuddy` 目录已被排除规则覆盖）。
