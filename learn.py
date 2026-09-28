@@ -1521,6 +1521,11 @@ def apply_weight_decay(index: dict, now: Optional[datetime] = None) -> list[str]
     return decay_log
 
 
+def _sources_of(entry: dict) -> set[str]:
+    """卡的来源项目集合（sourceProject 在多源扩写后是逗号拼接的）。"""
+    return {s.strip() for s in (entry.get("sourceProject") or "").split(",") if s.strip()}
+
+
 def update_cross_refs(
     index: dict,
     confirmed: list[dict],
@@ -1529,9 +1534,15 @@ def update_cross_refs(
 ) -> list[str]:
     """
     L6 交叉引用追踪：
-    - CONFIRM：被证实的知识权重 +2，lastReferencedAt 刷新
-    - EXTEND：被扩展的知识权重 +1，lastReferencedAt 刷新，iterationCount +1
+    - CONFIRM：被**其他来源**证实的知识权重 +2，lastReferencedAt 刷新
+    - EXTEND：被**其他来源**扩展的知识权重 +1，lastReferencedAt 刷新，iterationCount +1
     - NEW：新建卡片，无引用更新
+
+    NOTE 同源豁免（2026-09-28 实测后加）：同一份文档重复摄入、或同一文档切出的
+    碎片互相印证，都不是「独立来源证实」这一信号。旧实现不做区分，导致 373 条
+    加分记录里 260 条是同源，凭空灌出 468 分虚高权重（典型：一张卡被
+    'CONFIRM from 自身 sourceProject' 加 6 次，权重 10 → 22）。
+    现在同源关系仍记入 crossRefs（counted=false）以便审计，但不改权重。
     """
     log = []
 
@@ -1541,31 +1552,45 @@ def update_cross_refs(
         if entry:
             referenced_at = _now_iso()
             new_item = conf["item"]
-            entry["weight"] = entry.get("weight", 10) + 2
+            src = (new_item.get("source_project") or "").strip()
+            same_source = bool(src) and src in _sources_of(entry)
+            if not same_source:
+                entry["weight"] = entry.get("weight", 10) + 2
             entry["lastReferencedAt"] = referenced_at
             entry.setdefault("crossRefs", []).append({
                 "source": new_item.get("source_project", "unknown"),
                 "relation": RELATION_CONFIRM,
                 "at": referenced_at,
+                "counted": not same_source,
             })
-            log.append(f"📈 +2    | `{entry['title'][:40]}` 被新知识证实 → 权重 {entry['weight']}")
+            if same_source:
+                log.append(f"↺ SKIP  | `{entry['title'][:40]}` 同源重申（{src}）→ 权重保持 {entry['weight']}")
+            else:
+                log.append(f"📈 +2    | `{entry['title'][:40]}` 被新知识证实 → 权重 {entry['weight']}")
 
     for ext in extended:
         eid = ext["matched_entry"]["id"]
         entry = find_entry_by_id(index, eid)
         if entry:
             referenced_at = _now_iso()
-            entry["weight"] = entry.get("weight", 10) + 1
-            entry["iterationCount"] = entry.get("iterationCount", 0) + 1
+            new_item = ext["item"]
+            src = (new_item.get("source_project") or "").strip()
+            same_source = bool(src) and src in _sources_of(entry)
+            if not same_source:
+                entry["weight"] = entry.get("weight", 10) + 1
+                entry["iterationCount"] = entry.get("iterationCount", 0) + 1
             entry["version"] = entry.get("version", 1) + 1
             entry["lastReferencedAt"] = referenced_at
-            new_item = ext["item"]
             entry.setdefault("crossRefs", []).append({
                 "source": new_item.get("source_project", "unknown"),
                 "relation": RELATION_EXTEND,
                 "at": referenced_at,
+                "counted": not same_source,
             })
-            log.append(f"📈 +1    | `{entry['title'][:40]}` 被新知识扩展 → 权重 {entry['weight']} v{entry['version']}")
+            if same_source:
+                log.append(f"↺ SKIP  | `{entry['title'][:40]}` 同源扩展（{src}）→ 权重保持 {entry['weight']}")
+            else:
+                log.append(f"📈 +1    | `{entry['title'][:40]}` 被新知识扩展 → 权重 {entry['weight']} v{entry['version']}")
 
     return log
 
@@ -2479,21 +2504,110 @@ _CONFLICT_SIGNALS = ("不要", "避免", "禁止", "不应该", "不能", "反�
                      "avoid", "deprecated", "wrong", "切忌", "慎用")
 
 
-def _entry_overlap(a: dict, b: dict) -> float:
-    """计算两张卡的综合重叠度（0~1），取标题/标签/正文三者中最强信号。
+# ─── 相似度：骨架剥离 & 通用 tag 判废（2026-09-28）────────
+# 实测依据（216 张 active 卡）：
+#  ① tag 退化——'方案' 出现在 90 张卡上（42%）、'验证' 43 张，两张卡只要共享通用
+#     tag，tag_j 就能到 1.0，实测 583 对退化；按文档频率判废通用词后降至 30 对。
+#  ② 骨架污染——同类卡正文共用同一套模板骨架（### 陷阱 / ### 绕过方案 /
+#     ## 使用场景→通用场景 / 无特殊前置条件 / 暂无已知局限），骨架本身把
+#     body Jaccard 抬高，曾造出跨 5 个源、20 张卡的假簇；比对前必须剥掉。
+#
+# 旧实现用 max(title_j, tag_j, 0.5*body_j) 取「最强信号」，等于让退化的 tag 单独
+# 决定判定，iterate-scan 因此报出 411 对 CONFIRM（其中 610→ 仅 tag 驱动）。
+_CARD_SKELETON_HEAD = re.compile(
+    r"^##\s*(使用场景|适用场景|前置条件|已知局限|注意事项)\s*$"
+)
+_CARD_SKELETON_SUBHEAD = re.compile(
+    r"^#{2,4}\s*(陷阱|绕过方案|原则陈述|推导依据|行动指引|做法|错误做法|正确做法)\s*$"
+)
+_CARD_BOILERPLATE = frozenset(
+    {"通用场景", "无特殊前置条件", "暂无已知局限", "通用", "无", "暂无"}
+)
 
-    复用 ingest 已有的重叠口径：标题词汇重叠权重最高（同名不同义由 SAME_TITLE
-    关联处理），标签重叠代表同领域同坑，正文 Jaccard 取半权重（抗长文噪声）。
+
+def strip_card_skeleton(body: str) -> str:
+    """剥掉卡片模板骨架段与套话，只留实质内容，供相似度比对使用。
+
+    骨架对任意两张同类型卡都完全一致，留着会让「同类型」被误读成「同内容」。
     """
-    # NOTE: 标题含代码/路径/emoji 等「非字母字符」占比 >30% 时，英文 token 不可靠
-    # （如「Video Workflow」vs「Video Ag…」会虚高），此时对标题 Jaccard 降权，
-    # 改以 tag 重叠为主信号，避免碎片标题被误判为「互相印证」。
+    keep: list[str] = []
+    skipping = False
+    for line in body.splitlines():
+        stripped = line.strip()
+        if _CARD_SKELETON_HEAD.match(stripped):
+            skipping = True
+            continue
+        if skipping and stripped.startswith("## "):
+            skipping = False
+        if skipping:
+            continue
+        if stripped in _CARD_BOILERPLATE:
+            continue
+        if _CARD_SKELETON_SUBHEAD.match(stripped):
+            continue
+        keep.append(stripped)
+    return "\n".join(keep)
+
+
+def _entry_tags(entry: dict) -> set[str]:
+    """取卡片的 tag 集合（未补 tag 的卡用 _auto_tag 实时推导）。"""
+    tags = set(t.lower() for t in entry.get("tags", []))
+    if not tags:
+        tags = set(t.lower() for t in _auto_tag(entry))
+    return tags
+
+
+def _df_filter(entries: list[dict], extract, ratio: float = 0.03, floor: int = 5) -> set[str]:
+    """按文档频率挑出「无区分度」的词元。
+
+    出现在超过 max(floor, ratio×N) 张卡上的词元无法区分任意两张卡，必须从配对
+    信号里剔除。tag 与标题共用这一条口径——'方案'(90 张)/'验证'(43 张) 之于 tag，
+    与 '结'、'验'、'证' 之于标题，是同一类退化。
+    """
+    df: dict[str, int] = {}
+    for e in entries:
+        for t in extract(e):
+            df[t] = df.get(t, 0) + 1
+    cutoff = max(floor, ratio * len(entries))
+    return {t for t, c in df.items() if c > cutoff}
+
+
+def generic_tags(entries: list[dict]) -> set[str]:
+    """无区分度的通用 tag（如 '方案' 覆盖 90 张、'验证' 43 张）。"""
+    return _df_filter(entries, _entry_tags)
+
+
+def generic_title_tokens(entries: list[dict]) -> set[str]:
+    """无区分度的通用标题字（如 '结/验/证'）。
+
+    短标题场景下字符级 Jaccard 会被通用字撑爆：'✅ 解剖结构验证' vs '验证结果'
+    共享 结/验/证 三字、并集仅五个 → 60%，被判 CONFIRM，实为无关两张卡。
+    """
+    return _df_filter(entries, lambda e: _content_tokens(e.get("title", "")))
+
+
+def _entry_overlap(
+    a: dict,
+    b: dict,
+    skip_tags: set[str] | None = None,
+    skip_title: set[str] | None = None,
+) -> float:
+    """两张卡的综合重叠度（0~1）。
+
+    主信号只认标题与正文——二者任一高度一致才可能是一条知识；tag 降为
+    「已成立时的小幅加成」（≤0.15），绝不允许它单独把配对推到 CONFIRM 阈值。
+    """
+    skip_tags = skip_tags or set()
+    skip_title = skip_title or set()
+
     title_raw_a = a.get("title", "")
     title_raw_b = b.get("title", "")
     title_a = _content_tokens(title_raw_a)
     title_b = _content_tokens(title_raw_b)
     title_j = 0.0
-    if title_a and title_b:
+    # 闸门：共享词元里至少要有 2 个「非通用字」，否则短标题会被通用字撑成高相似
+    specific_shared = (title_a & title_b) - skip_title
+    if title_a and title_b and len(specific_shared) >= 2:
         inter = len(title_a & title_b)
         union = len(title_a | title_b)
         base_title_j = inter / union if union else 0.0
@@ -2502,25 +2616,11 @@ def _entry_overlap(a: dict, b: dict) -> float:
         len_a, len_b = max(len(title_raw_a), 1), max(len(title_raw_b), 1)
         noise_a = non_alpha_a / len_a
         noise_b = non_alpha_b / len_b
-        # 标题噪声高时仅保留 30% 权重，把主导权交还给 tag 重叠
+        # 标题噪声高（碎片/代码/emoji 多）时仅保留 30% 权重
         title_j = base_title_j * 0.3 if (noise_a > 0.3 or noise_b > 0.3) else base_title_j
 
-    tags_a = set(t.lower() for t in a.get("tags", []))
-    tags_b = set(t.lower() for t in b.get("tags", []))
-    # 未补 tag 的卡用实时 _auto_tag 推导，保证「无存盘 tag 也能被语义比对命中」
-    if not tags_a:
-        tags_a = set(t.lower() for t in _auto_tag(a))
-    if not tags_b:
-        tags_b = set(t.lower() for t in _auto_tag(b))
-    if tags_a and tags_b:
-        inter = len(tags_a & tags_b)
-        union = len(tags_a | tags_b)
-        tag_j = inter / union if union else 0.0
-    else:
-        tag_j = 0.0
-
-    body_a = _content_tokens(_load_card_body(a))
-    body_b = _content_tokens(_load_card_body(b))
+    body_a = _content_tokens(strip_card_skeleton(_load_card_body(a)))
+    body_b = _content_tokens(strip_card_skeleton(_load_card_body(b)))
     if body_a and body_b:
         inter = len(body_a & body_b)
         union = len(body_a | body_b)
@@ -2528,7 +2628,20 @@ def _entry_overlap(a: dict, b: dict) -> float:
     else:
         body_j = 0.0
 
-    return max(title_j, tag_j, 0.5 * body_j)
+    base = max(title_j, 0.5 * body_j)
+    if base < 0.3:
+        return base
+
+    tags_a = _entry_tags(a) - skip_tags
+    tags_b = _entry_tags(b) - skip_tags
+    if tags_a and tags_b:
+        inter = len(tags_a & tags_b)
+        union = len(tags_a | tags_b)
+        tag_j = inter / union if union else 0.0
+    else:
+        tag_j = 0.0
+
+    return min(1.0, base + 0.15 * tag_j)
 
 
 def _has_conflict_signal(entry: dict) -> bool:
@@ -2573,6 +2686,9 @@ def cmd_iterate_scan(apply: bool = False, min_overlap: float = 0.3) -> str:
 
     confirm_log, extend_log, conflict_log, isolate_log = [], [], [], []
     seen_pairs = set()
+    # 通用词元判废：出现在过多卡上的 tag / 标题字无区分度，先剔除再参与比对
+    skip_tags = generic_tags(active)
+    skip_title = generic_title_tokens(active)
 
     # NOTE: O(n^2) 两两比对，n=143 约 1 万对，单次扫描可接受；用 seen_pairs 去对称重复。
     for i in range(len(active)):
@@ -2588,7 +2704,7 @@ def cmd_iterate_scan(apply: bool = False, min_overlap: float = 0.3) -> str:
             # 同源对强制压到 0.15，远低于 min_overlap（默认 0.3），直接跳过。
             if a.get("sourceProject") == b.get("sourceProject") and a.get("sourceProject"):
                 continue
-            overlap = _entry_overlap(a, b)
+            overlap = _entry_overlap(a, b, skip_tags, skip_title)
             if overlap < min_overlap:
                 continue
 
