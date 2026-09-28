@@ -340,7 +340,7 @@ def _extract_principle_guidance(body: str) -> dict[str, str] | None:
     """
     将原理章节提炼为原则陈述、推导依据和行动指引，拒绝只有标题的空壳内容。
     """
-    without_code = re.sub(r"```[\s\S]*?```", " ", body)
+    without_code = _blank_fenced_blocks(body)   # 等长替换，容忍被截断的围栏
     content_lines = [
         line.strip()
         for line in without_code.splitlines()
@@ -741,6 +741,35 @@ def audit_l1_consistency(principles: list[dict]) -> tuple[list[dict], list[dict]
 # ─── L2 资产提取器（增强版）───────────────────────────────
 
 
+_FENCE_LINE = re.compile(r"^\s*(```|~~~)")
+
+
+def _blank_fenced_blocks(text: str) -> str:
+    """把围栏代码块的每一行替换成等长空白，长度与换行都保持不变。
+
+    动机：调用方按字符下标切「代码块前 N 字 / 后 M 字」的语义窗口，窗口起点
+    很容易落在某个围栏块的中间。此时若用 `re.sub(r"```.*?```", " ")` 剥离，
+    非贪婪配对会从「上一块的收尾围栏」一路吃到「本块的开头围栏」，把两者之间
+    的自然语言当成代码删掉——症状就是同一文档里只有第一个代码块能拿到决策
+    上下文，其余全部因 decision_complete=False 被丢弃；第一块还会吸到邻近
+    章节的句子。逐行扫描围栏并做等长替换后，窗口内不会残留任何被截断的围栏，
+    字符下标仍与原文档严格对齐。
+    """
+    out: list[str] = []
+    open_fence: str | None = None
+    for line in text.split("\n"):
+        m = _FENCE_LINE.match(line)
+        if m:
+            if open_fence is None:
+                open_fence = m.group(1)
+            elif line.strip().startswith(open_fence):
+                open_fence = None
+            out.append(" " * len(line))
+            continue
+        out.append(line if open_fence is None else " " * len(line))
+    return "\n".join(out)
+
+
 def _extract_decision_context(surrounding_text: str) -> dict[str, str]:
     """
     从代码块前后的文本中抽取模板卡的三个决策字段。
@@ -754,7 +783,8 @@ def _extract_decision_context(surrounding_text: str) -> dict[str, str]:
     不值得入库（避免退化成「代码快照」）。
     """
     # NOTE: 剥离代码围栏与 Markdown 噪声，只保留自然语言句子用于语义抽取。
-    cleaned = re.sub(r"```.*?```", " ", surrounding_text, flags=re.DOTALL)
+    # 用等长替换而不是非贪婪正则：后者在窗口起点落在围栏中间时会误删散文。
+    cleaned = _blank_fenced_blocks(surrounding_text)
     cleaned = re.sub(r"^#{1,6}\s+.*$", " ", cleaned, flags=re.MULTILINE)
     sentences = [
         s.strip() for s in re.split(r"(?<=[。！？；])\s*|\n+", cleaned) if s.strip()
@@ -926,6 +956,9 @@ def extract_assets(md_content: str, project_name: str) -> list[dict]:
     # NOTE: Windows 下文件常为 CRLF，正则按 LF 编写；统一标准化避免匹配失败。
     md_content = md_content.replace("\r\n", "\n")
     assets = []
+    # 等长的「去代码」视图（围栏块内容 -> 等长空白，下标与原文档一致）：
+    # 用它切决策上下文窗口，窗口起点落在围栏中间时也不会把散文误删。
+    md_prose = _blank_fenced_blocks(md_content)
 
     # ── 代码块提取（增强过滤）
     code_blocks = re.finditer(
@@ -975,9 +1008,17 @@ def extract_assets(md_content: str, project_name: str) -> list[dict]:
 
         # NOTE: 决策上下文来自代码块「前后」的自然语言，而非代码本身。
         # 取代码块前 600 字 + 后 400 字作为语义窗口，避免跨章节串味。
+        # 回看起点再夹到本段最近的标题处：固定 600 字会跨过 `###` 子标题，把上
+        # 一段的决策句吸进本段的 when / avoid / why（实测首版模板卡就这样被污染）。
         ctx_start = max(0, match.start() - 600)
+        _heads = [h.start() for h in re.finditer(r"^#{1,6}\s+.*$", md_prose[:match.start()], re.MULTILINE)]
+        if _heads:
+            ctx_start = max(ctx_start, _heads[-1])
         ctx_end = min(len(md_content), match.end() + 400)
-        surrounding = md_content[ctx_start:ctx_end]
+        _nxt = re.search(r"^#{1,6}\s+.*$", md_prose[match.end():ctx_end], re.MULTILINE)
+        if _nxt:
+            ctx_end = match.end() + _nxt.start()
+        surrounding = md_prose[ctx_start:ctx_end]
         decision = _extract_decision_context(surrounding)
         guidance = _extract_template_guidance(template_title, code, lang, decision)
 
@@ -1035,7 +1076,10 @@ def extract_assets(md_content: str, project_name: str) -> list[dict]:
         # 格式 2：踩坑记录
         r"(?:踩坑|踩过.*坑|遇到一个坑)[：:]*\s*(.+?)(?=\n\n|\n##|\n###|\Z)",
         # 格式 3：建议避免
-        r"(?:避免|不要|别|不应该|不建议|禁止)\s*(.+?)(?=\n\n|\n##|\n###|\Z)",
+        # NOTE: 「别」必须带左边界，否则会命中「分别 / 区别 / 差别」这类词中间的
+        # 字，把正常句子切成碎片陷阱卡（实测「…阴影段与主色段分别统计。」曾产出
+        # 一张题为「统计。性能归因的…陷阱」的垃圾卡）。
+        r"(?:避免|不要|(?<![\u4e00-\u9fff])别|不应该|不建议|禁止)\s*(.+?)(?=\n\n|\n##|\n###|\Z)",
         # 格式 4：常见问题
         r"(?:常见问题|注意事项|⚠️|🚨|❗)\s*(.+?)(?=\n\n|\n##|\n###|\Z)",
         # 格式 5：但是 / 然而 / 问题是
@@ -3425,7 +3469,14 @@ def cmd_recall(intent: str = None, workspace: str = None, top_k: int = 8,
     if not query_text:
         return ("⚠️ 缺少召回意图。请传入 --intent \"描述\" 或 --workspace \"项目路径\"，"
                 "例如：`python learn.py recall --workspace \"D:\\my-saas-backend\"`")
-    query_tokens = {t for t in _content_tokens(query_text) if len(t) >= 2}
+    # NOTE: 中文召回要点——_content_tokens 返回的中文 token 均为单字（长度=1），
+    # 旧条件 `len(t) >= 2` 会把中文全部过滤掉，导致纯中文意图的 query_tokens 为空、
+    # 中文召回 100% 失效（英文词长度天然 >2 不受影响，掩盖了此 Bug）。
+    # 修复：英文按长度过滤，中文单字（已在 _content_tokens 去停用字）一律保留。
+    query_tokens = {
+        t for t in _content_tokens(query_text)
+        if len(t) >= 2 or (len(t) == 1 and "\u4e00" <= t <= "\u9fff")
+    }
 
     ranked = [(s, e) for e in active if (s := _recall_score(e, query_tokens)) > 0]
     ranked.sort(key=lambda x: -x[0])
